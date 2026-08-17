@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Courriers — Accueil</title>
+<link rel="icon" type="image/jpeg" href="images/muctat-logo.jpg">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="navbar"></div>
+
+<div class="container">
+  <div class="home-hero">
+    <h2>Bienvenue, <span id="home-nom"></span> 👋</h2>
+    <p>Choisissez un module pour commencer.</p>
+  </div>
+
+  <div class="home-grid" id="home-grid"></div>
+</div>
+
+<script src="js/api-client.js"></script>
+<script src="js/navbar.js"></script>
+<script>
+  const MODULES = [
+    { href: 'tableau-de-bord.html', icon: '📊', titre: 'Tableau de bord', desc: "Vue d'ensemble de l'activité", roles: null },
+    { href: 'courriers-entrants.html', icon: '📥', titre: 'Courriers entrants', desc: 'Enregistrer et suivre le courrier reçu', roles: ['ADMINISTRATEUR', 'SUPER_AGENT'] },
+    { href: 'courriers-sortants.html', icon: '📤', titre: 'Courriers sortants', desc: 'Créer et suivre les courriers envoyés', roles: ['ADMINISTRATEUR', 'SUPER_AGENT'] },
+    { href: 'imputations.html', icon: '📝', titre: 'Imputations', desc: 'Consignes, réponses et suivi des tâches', roles: null },
+    { href: 'parametres.html', icon: '⚙️', titre: 'Paramètres', desc: 'Comptes utilisateurs et types de document', roles: ['ADMINISTRATEUR'] },
+  ];
+
+  async function demarrer() {
+    const user = await initNavbar('accueil');
+    document.getElementById('home-nom').textContent = user.nom_complet;
+    const grid = document.getElementById('home-grid');
+    grid.innerHTML = MODULES
+      .filter((m) => !m.roles || m.roles.includes(user.role))
+      .map((m) => `
+        <a class="home-card" href="${m.href}">
+          <div class="home-icon">${m.icon}</div>
+          <h3>${m.titre}</h3>
+          <p>${m.desc}</p>
+        </a>
+      `).join('');
+  }
+  demarrer().catch((err) => alert(err.message));
+</script>
+</body>
+</html>

@@ -1,0 +1,163 @@
+// ===================================================================
+// NAVBAR PARTAGÉE — injectée dans <div id="navbar"></div>
+// ===================================================================
+
+const NAV_ITEMS = [
+  { page: 'accueil', label: 'Accueil', href: 'accueil.html', roles: null },
+  { page: 'tableau-de-bord', label: 'Tableau de bord', href: 'tableau-de-bord.html', roles: null },
+  { page: 'entrants', label: 'Courriers entrants', href: 'courriers-entrants.html', roles: ['ADMINISTRATEUR', 'SUPER_AGENT'] },
+  { page: 'sortants', label: 'Courriers sortants', href: 'courriers-sortants.html', roles: ['ADMINISTRATEUR', 'SUPER_AGENT'] },
+  { page: 'imputations', label: 'Imputations', href: 'imputations.html', roles: null },
+  { page: 'parametres', label: 'Paramètres', href: 'parametres.html', roles: ['ADMINISTRATEUR'] },
+];
+
+const LABEL_ROLE = {
+  ADMINISTRATEUR: 'Administrateur',
+  SUPER_AGENT: 'Super Agent',
+  AGENT: 'Agent',
+};
+
+function resolveActivePage(activePage) {
+  const rawPage = activePage || window.location.pathname || '';
+  const normalized = rawPage
+    .split('?')[0]
+    .split('#')[0]
+    .replace(/\\/g, '/')
+    .toLowerCase();
+  const fileName = normalized.substring(normalized.lastIndexOf('/') + 1);
+  const baseName = fileName.replace(/\.html$/i, '');
+
+  const aliases = {
+    'accueil': 'accueil',
+    'accueil.html': 'accueil',
+    'tableau-de-bord': 'tableau-de-bord',
+    'tableau-de-bord.html': 'tableau-de-bord',
+    'courriers-entrants': 'entrants',
+    'courriers-entrants.html': 'entrants',
+    'courriers-sortants': 'sortants',
+    'courriers-sortants.html': 'sortants',
+    'imputations': 'imputations',
+    'imputations.html': 'imputations',
+    'parametres': 'parametres',
+    'parametres.html': 'parametres',
+    'index': null,
+    'index.html': null,
+  };
+
+  return aliases[baseName] || aliases[fileName] || null;
+}
+
+function formatDateRelative(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function lienNotification(n) {
+  if (n.lien_module === 'entrant') return 'courriers-entrants.html';
+  if (n.lien_module === 'sortant') return 'courriers-sortants.html';
+  if (n.lien_module === 'imputation') return 'imputations.html';
+  return null;
+}
+
+async function rafraichirCloche() {
+  const badge = document.getElementById('notif-badge');
+  const liste = document.getElementById('notif-liste');
+  if (!badge || !liste) return;
+  try {
+    const { notifications, non_lues } = await CourrierAPI.listerNotifications();
+    badge.style.display = non_lues > 0 ? 'inline-flex' : 'none';
+    badge.textContent = non_lues > 9 ? '9+' : String(non_lues);
+
+    liste.innerHTML = notifications.length ? notifications.map((n) => `
+      <div class="notif-item ${n.lu ? '' : 'notif-unread'}" data-id="${n.id}" data-href="${lienNotification(n) || ''}">
+        <div class="notif-msg">${n.message}</div>
+        <div class="notif-date">${formatDateRelative(n.created_at)}</div>
+      </div>
+    `).join('') : '<div class="notif-empty">Aucune notification.</div>';
+
+    liste.querySelectorAll('.notif-item').forEach((el) => {
+      el.addEventListener('click', async () => {
+        try { await CourrierAPI.marquerNotificationLue(el.dataset.id); } catch (e) { /* ignore */ }
+        if (el.dataset.href) window.location.href = el.dataset.href;
+        else rafraichirCloche();
+      });
+    });
+  } catch (err) {
+    console.error('Notifications:', err.message);
+  }
+}
+
+async function initNavbar(activePage) {
+  const el = document.getElementById('navbar');
+  if (!el) return null;
+
+  let user;
+  try {
+    user = await CourrierAPI.moi();
+  } catch (err) {
+    window.location.href = 'index.html';
+    return null;
+  }
+
+  const currentPage = resolveActivePage(activePage);
+
+  const links = NAV_ITEMS
+    .filter((item) => !item.roles || item.roles.includes(user.role))
+    .map((item) => `<a href="${item.href}" class="${item.page === currentPage ? 'active' : ''}">${item.label}</a>`)
+    .join('');
+
+  el.innerHTML = `
+    <header class="topbar">
+      <div class="brand">
+        <img src="images/muctat-logo.jpg" alt="Logo" onerror="this.style.display='none'">
+        <div>
+          <h1>Gestion des courriers</h1>
+        </div>
+      </div>
+      <nav>${links}</nav>
+      <div class="user-box">
+        <div class="notif-bell-wrap">
+          <button class="btn-bell" id="btn-cloche" title="Notifications" aria-label="Notifications">
+            🔔<span class="notif-badge" id="notif-badge" style="display:none;">0</span>
+          </button>
+          <div class="notif-dropdown" id="notif-dropdown" style="display:none;">
+            <div class="notif-dropdown-header">
+              <strong>Notifications</strong>
+              <button class="link-btn" id="btn-tout-lu" style="width:auto; margin:0;">Tout marquer comme lu</button>
+            </div>
+            <div class="notif-liste" id="notif-liste"><div class="notif-empty">Chargement…</div></div>
+          </div>
+        </div>
+        <div>
+          <div>${user.nom_complet}</div>
+          <div class="role-tag">${LABEL_ROLE[user.role] || user.role}</div>
+        </div>
+        <button class="btn-logout" id="btn-deconnexion">Déconnexion</button>
+      </div>
+    </header>
+  `;
+
+  document.getElementById('btn-deconnexion').addEventListener('click', async () => {
+    try { await CourrierAPI.logout(); } catch (e) { /* ignore */ }
+    window.location.href = 'index.html';
+  });
+
+  const cloche = document.getElementById('btn-cloche');
+  const dropdown = document.getElementById('notif-dropdown');
+  cloche.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+  });
+  document.addEventListener('click', (e) => {
+    if (!dropdown.contains(e.target) && e.target !== cloche) dropdown.style.display = 'none';
+  });
+  document.getElementById('btn-tout-lu').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    try { await CourrierAPI.marquerToutesNotificationsLues(); await rafraichirCloche(); } catch (err) { /* ignore */ }
+  });
+
+  rafraichirCloche();
+  setInterval(rafraichirCloche, 30000);
+
+  return user;
+}

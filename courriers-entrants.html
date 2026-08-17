@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Courriers entrants</title>
+<link rel="icon" type="image/jpeg" href="images/muctat-logo.jpg">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="navbar"></div>
+
+<div class="container">
+  <div class="page-header">
+    <div>
+      <h2>Courriers entrants</h2>
+      <p>Enregistrement et suivi du courrier reçu</p>
+    </div>
+    <button class="btn btn-arrivee" id="btn-nouveau">+ Nouveau courrier entrant</button>
+  </div>
+
+  <div class="summary-grid">
+    <div class="summary-card arrivee">
+      <div class="label">Total entrants</div>
+      <div class="value" id="summary-total">0</div>
+      <div class="mini">Courriers enregistrés</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">En attente</div>
+      <div class="value" id="summary-attente">0</div>
+      <div class="mini">À traiter rapidement</div>
+    </div>
+    <div class="summary-card depart">
+      <div class="label">Urgents</div>
+      <div class="value" id="summary-urgents">0</div>
+      <div class="mini">Priorité élevée</div>
+    </div>
+  </div>
+
+  <div class="info-banner">
+    <div class="info-item">Dernier numéro : <strong id="info-last">—</strong></div>
+  </div>
+
+  <div class="search-bar field-row">
+    <input type="search" id="recherche" placeholder="Rechercher par numéro, expéditeur, objet…">
+    <select id="filtre-statut">
+      <option value="">Tous les statuts</option>
+      <option value="en_attente">En attente</option>
+      <option value="en_cours">En cours</option>
+      <option value="traite">Traité</option>
+    </select>
+    <select id="filtre-priorite">
+      <option value="">Toutes priorités</option>
+      <option value="normal">Normal</option>
+      <option value="urgent">Urgent</option>
+      <option value="tres_urgent">Très urgent</option>
+    </select>
+  </div>
+
+  <div class="table-card">
+    <table>
+      <thead>
+        <tr>
+          <th>Numéro</th><th>Date</th><th>Expéditeur</th><th>Objet</th><th>Priorité</th><th>Statut</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="corps-tableau">
+        <tr><td colspan="7" class="empty-row">Chargement…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modale : création / détail -->
+<div class="modal-overlay" id="modal-overlay" style="display:none;">
+  <div class="modal modal-large">
+    <div class="modal-header">
+      <h3 id="modal-titre">Nouveau courrier entrant</h3>
+      <button class="modal-close" id="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-courrier">
+        <input type="hidden" id="c-id">
+        <div class="field-row">
+          <div class="field">
+            <label>Date de réception</label>
+            <input type="date" id="c-date" required>
+          </div>
+          <div class="field">
+            <label>Expéditeur</label>
+            <input type="text" id="c-expediteur" required>
+          </div>
+        </div>
+        <div class="field">
+          <label>Objet</label>
+          <textarea id="c-objet" rows="2" required></textarea>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Type de document</label>
+            <div class="input-with-btn">
+              <select id="c-type-doc"></select>
+              <button type="button" class="btn btn-outline btn-sm" id="btn-add-type">+</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Priorité</label>
+            <select id="c-priorite">
+              <option value="normal">Normal</option>
+              <option value="urgent">Urgent</option>
+              <option value="tres_urgent">Très urgent</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Statut</label>
+            <select id="c-statut">
+              <option value="en_attente">En attente</option>
+              <option value="en_cours">En cours</option>
+              <option value="traite">Traité</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field" id="bloc-pj" style="display:none;">
+          <label>Pièces jointes (scans)</label>
+          <input type="file" id="c-fichier" multiple>
+          <div class="pj-list" id="liste-pj"></div>
+        </div>
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="c-accuse">
+          <label style="margin:0;">Accusé de réception délivré</label>
+        </div>
+
+        <p id="erreur-form" class="msg-error" style="display:none;"></p>
+
+        <div class="modal-actions">
+          <button type="submit" class="btn btn-arrivee" id="btn-enregistrer">Enregistrer</button>
+          <button type="button" class="btn btn-outline" id="btn-annuler">Annuler</button>
+          <button type="button" class="btn btn-danger" id="btn-supprimer" style="display:none; margin-left:auto;">Supprimer</button>
+        </div>
+      </form>
+
+      <div id="bloc-historique" style="display:none; margin-top:24px;">
+        <h3 style="font-size:0.95rem; color:var(--navy); margin-bottom:10px;">Historique des modifications</h3>
+        <div id="liste-historique"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/api-client.js"></script>
+<script src="js/navbar.js"></script>
+<script>
+  let TYPES_DOC = [];
+  let courrierCourantId = null;
+
+  const LABEL_STATUT = { en_attente: 'En attente', en_cours: 'En cours', traite: 'Traité' };
+  const LABEL_PRIORITE = { normal: 'Normal', urgent: 'Urgent', tres_urgent: 'Très urgent' };
+
+  function remplirSelect(select, items, valeurSelectionnee) {
+    select.innerHTML = items.map((i) => `<option value="${i.id}">${i.nom}</option>`).join('');
+    if (valeurSelectionnee) select.value = valeurSelectionnee;
+  }
+
+  async function chargerListes() {
+    TYPES_DOC = await CourrierAPI.listerTypesDocument();
+    remplirSelect(document.getElementById('c-type-doc'), TYPES_DOC);
+  }
+
+  function mettreAJourResume(courriers) {
+    const total = courriers.length;
+    const attente = courriers.filter((c) => c.statut === 'en_attente').length;
+    const urgents = courriers.filter((c) => c.priorite === 'urgent' || c.priorite === 'tres_urgent').length;
+    const lastNumero = courriers.length ? courriers[0].numero || '—' : '—';
+
+    document.getElementById('summary-total').textContent = total;
+    document.getElementById('summary-attente').textContent = attente;
+    document.getElementById('summary-urgents').textContent = urgents;
+    document.getElementById('info-last').textContent = lastNumero;
+  }
+
+  async function chargerTableau() {
+    const corps = document.getElementById('corps-tableau');
+    corps.innerHTML = '<tr><td colspan="7" class="empty-row">Chargement…</td></tr>';
+    const filtres = {};
+    const q = document.getElementById('recherche').value.trim();
+    const statut = document.getElementById('filtre-statut').value;
+    const priorite = document.getElementById('filtre-priorite').value;
+    if (q) filtres.q = q;
+    if (statut) filtres.statut = statut;
+    if (priorite) filtres.priorite = priorite;
+
+    const courriers = await CourrierAPI.listerEntrants(filtres);
+    mettreAJourResume(courriers);
+    if (!courriers.length) {
+      corps.innerHTML = '<tr><td colspan="7" class="empty-row"><div class="empty-state">📭 Aucun courrier entrant pour le moment.<br><small>Ajoutez un nouveau courrier pour commencer.</small></div></td></tr>';
+      return;
+    }
+    corps.innerHTML = courriers.map((c) => `
+      <tr data-id="${c.id}" class="${(c.priorite === 'urgent' || c.priorite === 'tres_urgent') ? 'highlight-row' : ''}" style="cursor:pointer;">
+        <td><span class="ref-badge arrivee">${c.numero}</span></td>
+        <td>${c.date_reception}</td>
+        <td>${c.expediteur}</td>
+        <td class="truncate">${c.objet}</td>
+        <td><span class="priorite-tag priorite-${c.priorite}">${LABEL_PRIORITE[c.priorite]}</span></td>
+        <td><span class="status-tag status-${c.statut}">${LABEL_STATUT[c.statut]}</span></td>
+        <td>
+          <button type="button" class="btn btn-sm btn-outline" data-action="voir-scan" data-module="entrant" data-id="${c.id}" title="Voir le PDF associé" aria-label="Voir le PDF associé">👁</button>
+          <button type="button" class="btn btn-sm btn-danger" data-action="supprimer" data-id="${c.id}" title="Supprimer le courrier entrant">🗑</button>
+        </td>
+      </tr>
+    `).join('');
+    corps.querySelectorAll('tr[data-id]').forEach((tr) => {
+      tr.addEventListener('click', () => ouvrirDetail(parseInt(tr.dataset.id, 10), courriers));
+    });
+    corps.querySelectorAll('[data-action="voir-scan"]').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try {
+          const pjs = await CourrierAPI.listerPiecesJointes(btn.dataset.module, parseInt(btn.dataset.id, 10));
+          if (pjs.length) {
+            window.open(CourrierAPI.urlScan(pjs[0].chemin), '_blank', 'noopener,noreferrer');
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      });
+    });
+    corps.querySelectorAll('[data-action="supprimer"]').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!confirm('Supprimer définitivement ce courrier entrant ?')) return;
+        try {
+          await CourrierAPI.supprimerEntrant(parseInt(btn.dataset.id, 10));
+          await chargerTableau();
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+    });
+  }
+
+  function resetForm() {
+    courrierCourantId = null;
+    document.getElementById('form-courrier').reset();
+    document.getElementById('c-id').value = '';
+    document.getElementById('c-date').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('c-statut').value = 'en_attente';
+    document.getElementById('modal-titre').textContent = 'Nouveau courrier entrant';
+    document.getElementById('bloc-pj').style.display = 'block';
+    document.getElementById('bloc-historique').style.display = 'none';
+    document.getElementById('btn-supprimer').style.display = 'none';
+    document.getElementById('erreur-form').style.display = 'none';
+  }
+
+  function ouvrirModale() {
+    document.getElementById('modal-overlay').style.display = 'flex';
+  }
+  function fermerModale() {
+    document.getElementById('modal-overlay').style.display = 'none';
+  }
+
+  async function ouvrirDetail(id, courriers) {
+    const c = courriers.find((x) => x.id === id);
+    if (!c) return;
+    resetForm();
+    courrierCourantId = id;
+    document.getElementById('modal-titre').textContent = `Courrier ${c.numero}`;
+    document.getElementById('c-id').value = c.id;
+    document.getElementById('c-date').value = c.date_reception;
+    document.getElementById('c-expediteur').value = c.expediteur;
+    document.getElementById('c-objet').value = c.objet;
+    if (c.type_document_id) document.getElementById('c-type-doc').value = c.type_document_id;
+    document.getElementById('c-priorite').value = c.priorite;
+    document.getElementById('c-statut').value = c.statut;
+    document.getElementById('c-accuse').checked = c.accuse_reception;
+    document.getElementById('btn-supprimer').style.display = 'inline-flex';
+    document.getElementById('bloc-pj').style.display = 'block';
+    document.getElementById('bloc-historique').style.display = 'block';
+    ouvrirModale();
+    chargerPiecesJointes(id, c.numero);
+    chargerHistorique(id);
+  }
+
+  async function chargerPiecesJointes(id, numero) {
+    const liste = document.getElementById('liste-pj');
+    liste.innerHTML = 'Chargement…';
+    try {
+      const pjs = await CourrierAPI.listerPiecesJointes('entrant', id);
+      liste.innerHTML = pjs.length ? pjs.map((pj) => `
+        <div class="pj-item">
+          <span class="pj-label">
+            <a href="${CourrierAPI.urlScan(pj.chemin)}" target="_blank" rel="noopener">${pj.nom_original}</a>
+          </span>
+          <div class="pj-actions">
+            <a href="${CourrierAPI.urlScan(pj.chemin)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline" title="Voir le PDF" aria-label="Voir le PDF">👁</a>
+            <button type="button" class="btn btn-sm btn-danger" data-pj-id="${pj.id}">Supprimer</button>
+          </div>
+        </div>
+      `).join('') : '<p style="color:var(--text-muted); font-size:0.85rem;">Aucune pièce jointe.</p>';
+      liste.querySelectorAll('[data-pj-id]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          await CourrierAPI.supprimerPieceJointe(btn.dataset.pjId);
+          chargerPiecesJointes(id, numero);
+        });
+      });
+    } catch (err) {
+      liste.innerHTML = `<p class="msg-error">${err.message}</p>`;
+    }
+  }
+
+  async function chargerHistorique(id) {
+    const liste = document.getElementById('liste-historique');
+    liste.innerHTML = 'Chargement…';
+    try {
+      const entrees = await CourrierAPI.historique({ courrier_module: 'entrant', entity_id: id });
+      liste.innerHTML = entrees.length ? entrees.map((h) => `
+        <div class="history-entry">
+          <div class="history-icon">${(h.utilisateurs ? h.utilisateurs.nom_complet : '?').charAt(0)}</div>
+          <div class="history-content">
+            <strong>${h.action} — ${h.utilisateurs ? h.utilisateurs.nom_complet : 'Utilisateur inconnu'}</strong>
+            <p>${new Date(h.created_at).toLocaleString('fr-FR')}</p>
+          </div>
+        </div>
+      `).join('') : '<p style="color:var(--text-muted); font-size:0.85rem;">Aucun historique.</p>';
+    } catch (err) {
+      liste.innerHTML = `<p class="msg-error">${err.message}</p>`;
+    }
+  }
+
+  document.getElementById('btn-nouveau').addEventListener('click', () => { resetForm(); ouvrirModale(); });
+  document.getElementById('modal-close').addEventListener('click', fermerModale);
+  document.getElementById('btn-annuler').addEventListener('click', fermerModale);
+
+  document.getElementById('btn-add-type').addEventListener('click', async () => {
+    const nom = prompt('Nom du nouveau type de document :');
+    if (!nom) return;
+    await CourrierAPI.ajouterTypeDocument(nom);
+    await chargerListes();
+  });
+
+  document.getElementById('form-courrier').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const erreur = document.getElementById('erreur-form');
+    erreur.style.display = 'none';
+    const donnees = {
+      date_reception: document.getElementById('c-date').value,
+      expediteur: document.getElementById('c-expediteur').value.trim(),
+      objet: document.getElementById('c-objet').value.trim(),
+      type_document_id: document.getElementById('c-type-doc').value || null,
+      priorite: document.getElementById('c-priorite').value,
+      accuse_reception: document.getElementById('c-accuse').checked,
+    };
+
+    try {
+      let courrier;
+      if (courrierCourantId) {
+        donnees.statut = document.getElementById('c-statut').value;
+        courrier = await CourrierAPI.modifierEntrant(courrierCourantId, donnees);
+        courrier = Array.isArray(courrier) ? courrier[0] : courrier;
+      } else {
+        courrier = await CourrierAPI.creerEntrant(donnees);
+        courrier = Array.isArray(courrier) ? courrier[0] : courrier;
+        courrierCourantId = courrier.id;
+      }
+
+      const fichierInput = document.getElementById('c-fichier');
+      if (fichierInput.files.length) {
+        for (const fichier of fichierInput.files) {
+          const televerse = await CourrierAPI.televerserFichier('entrant', courrier.numero, fichier);
+          await CourrierAPI.enregistrerPieceJointe({
+            courrier_module: 'entrant',
+            courrier_id: courrierCourantId,
+            chemin: televerse.chemin,
+            nom_original: televerse.nom_original,
+            type_mime: televerse.type_mime,
+          });
+        }
+      }
+
+      fermerModale();
+      chargerTableau();
+    } catch (err) {
+      erreur.textContent = err.message;
+      erreur.style.display = 'block';
+    }
+  });
+
+  document.getElementById('btn-supprimer').addEventListener('click', async () => {
+    if (!courrierCourantId || !confirm('Supprimer définitivement ce courrier ?')) return;
+    await CourrierAPI.supprimerEntrant(courrierCourantId);
+    fermerModale();
+    chargerTableau();
+  });
+
+  document.getElementById('recherche').addEventListener('input', () => { clearTimeout(window._t); window._t = setTimeout(chargerTableau, 300); });
+  document.getElementById('filtre-statut').addEventListener('change', chargerTableau);
+  document.getElementById('filtre-priorite').addEventListener('change', chargerTableau);
+
+  async function demarrer() {
+    const user = await initNavbar('entrants');
+    if (user.role === 'AGENT') {
+      window.location.href = 'imputations.html';
+      return;
+    }
+    await chargerListes();
+    resetForm();
+    await chargerTableau();
+  }
+  demarrer().catch((err) => alert(err.message));
+</script>
+</body>
+</html>

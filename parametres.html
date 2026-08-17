@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paramètres</title>
+<link rel="icon" type="image/jpeg" href="images/muctat-logo.jpg">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="navbar"></div>
+
+<div class="container">
+  <div class="page-header">
+    <div>
+      <h2>Paramètres</h2>
+      <p>Types de document et comptes utilisateurs</p>
+    </div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h3>Types de document</h3>
+      <div class="managed-list">
+        <div class="add-row">
+          <input type="text" id="nouveau-type" placeholder="Nom du type">
+          <button class="btn btn-primary btn-sm" id="btn-add-type">Ajouter</button>
+        </div>
+        <div class="managed-list-items" id="liste-types"></div>
+      </div>
+    </div>
+
+    <div class="chart-card full">
+      <h3>Utilisateurs</h3>
+      <form id="form-utilisateur" class="field-row" style="margin-bottom:16px; align-items:flex-end;">
+        <div class="field">
+          <label>Nom complet</label>
+          <input type="text" id="u-nom" required>
+        </div>
+        <div class="field">
+          <label>Identifiant</label>
+          <input type="text" id="u-username" required>
+        </div>
+        <div class="field">
+          <label>Mot de passe</label>
+          <input type="password" id="u-password" required>
+        </div>
+        <div class="field">
+          <label>Rôle</label>
+          <select id="u-role">
+            <option value="AGENT">Agent</option>
+            <option value="SUPER_AGENT">Super Agent</option>
+            <option value="ADMINISTRATEUR">Administrateur</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Créer le compte</button>
+      </form>
+      <p id="erreur-utilisateur" class="msg-error" style="display:none;"></p>
+      <div class="table-card">
+        <table>
+          <thead><tr><th>Nom</th><th>Identifiant</th><th>Rôle</th><th>Statut</th><th></th></tr></thead>
+          <tbody id="liste-utilisateurs"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/api-client.js"></script>
+<script src="js/navbar.js"></script>
+<script>
+  async function chargerTypes() {
+    const liste = document.getElementById('liste-types');
+    const types = await CourrierAPI.listerTypesDocument();
+    liste.innerHTML = types.length ? types.map((t) => `
+      <div class="managed-list-item">
+        <span>${t.nom}</span>
+        <button class="btn btn-sm btn-danger" data-id="${t.id}">Supprimer</button>
+      </div>
+    `).join('') : '<p style="padding:16px; color:var(--text-muted); font-size:0.85rem;">Aucun type.</p>';
+    liste.querySelectorAll('[data-id]').forEach((btn) => btn.addEventListener('click', async () => {
+      if (!confirm('Supprimer ce type de document ?')) return;
+      try { await CourrierAPI.supprimerTypeDocument(btn.dataset.id); chargerTypes(); }
+      catch (err) { alert(err.message); }
+    }));
+  }
+
+  async function chargerUtilisateurs() {
+    const corps = document.getElementById('liste-utilisateurs');
+    const utilisateurs = await CourrierAPI.listerUtilisateurs();
+    const LABEL_ROLE = { ADMINISTRATEUR: 'Administrateur', SUPER_AGENT: 'Super Agent', AGENT: 'Agent' };
+    corps.innerHTML = utilisateurs.map((u) => `
+      <tr>
+        <td>${u.nom_complet}</td>
+        <td>${u.username}</td>
+        <td>${LABEL_ROLE[u.role] || u.role}</td>
+        <td>${u.actif ? '<span class="status-tag status-traite">Actif</span>' : '<span class="status-tag status-archive">Désactivé</span>'}</td>
+        <td>
+          <button class="btn btn-sm btn-outline" data-id="${u.id}" data-actif="${u.actif}">${u.actif ? 'Désactiver' : 'Activer'}</button>
+          <button class="btn btn-sm btn-danger" data-supprimer="${u.id}">Supprimer</button>
+        </td>
+      </tr>
+    `).join('');
+    corps.querySelectorAll('[data-id]').forEach((btn) => btn.addEventListener('click', async () => {
+      const actif = btn.dataset.actif === 'true';
+      await CourrierAPI.modifierUtilisateur(btn.dataset.id, { actif: !actif });
+      chargerUtilisateurs();
+    }));
+    corps.querySelectorAll('[data-supprimer]').forEach((btn) => btn.addEventListener('click', async () => {
+      if (!confirm('Supprimer définitivement ce compte ?')) return;
+      try { await CourrierAPI.supprimerUtilisateur(btn.dataset.supprimer); chargerUtilisateurs(); }
+      catch (err) { alert(err.message); }
+    }));
+  }
+
+  document.getElementById('btn-add-type').addEventListener('click', async () => {
+    const champ = document.getElementById('nouveau-type');
+    if (!champ.value.trim()) return;
+    try { await CourrierAPI.ajouterTypeDocument(champ.value.trim()); champ.value = ''; chargerTypes(); }
+    catch (err) { alert(err.message); }
+  });
+
+  document.getElementById('form-utilisateur').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const erreur = document.getElementById('erreur-utilisateur');
+    erreur.style.display = 'none';
+    try {
+      await CourrierAPI.creerUtilisateur({
+        nom_complet: document.getElementById('u-nom').value.trim(),
+        username: document.getElementById('u-username').value.trim(),
+        password: document.getElementById('u-password').value,
+        role: document.getElementById('u-role').value,
+      });
+      document.getElementById('form-utilisateur').reset();
+      chargerUtilisateurs();
+    } catch (err) {
+      erreur.textContent = err.message;
+      erreur.style.display = 'block';
+    }
+  });
+
+  async function demarrer() {
+    const user = await initNavbar('parametres');
+    if (user.role !== 'ADMINISTRATEUR') {
+      alert('Accès réservé à l\'administrateur.');
+      window.location.href = 'accueil.html';
+      return;
+    }
+    await Promise.all([chargerTypes(), chargerUtilisateurs()]);
+  }
+  demarrer().catch((err) => alert(err.message));
+</script>
+</body>
+</html>
