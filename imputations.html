@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Imputations</title>
+<link rel="icon" type="image/jpeg" href="images/muctat-logo.jpg">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="navbar"></div>
+
+<div class="container">
+  <div class="page-header">
+    <div>
+      <h2>Imputations</h2>
+      <p id="page-subtitle">Consignes envoyées, courrier joint, réponses et suivi de traitement</p>
+    </div>
+    <button class="btn btn-primary" id="btn-nouvelle" style="display:none;">+ Nouvelle imputation</button>
+  </div>
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="label">Total</div>
+      <div class="value" id="summary-total">0</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">En attente</div>
+      <div class="value" id="summary-attente">0</div>
+    </div>
+    <div class="summary-card arrivee">
+      <div class="label">En cours</div>
+      <div class="value" id="summary-cours">0</div>
+    </div>
+    <div class="summary-card depart">
+      <div class="label">Traitées</div>
+      <div class="value" id="summary-traite">0</div>
+    </div>
+  </div>
+
+  <div class="search-bar field-row">
+    <select id="filtre-statut">
+      <option value="">Tous les statuts</option>
+      <option value="en_attente">En attente</option>
+      <option value="en_cours">En cours</option>
+      <option value="traite">Traité</option>
+    </select>
+  </div>
+
+  <div id="liste-imputations"><p class="empty-row">Chargement…</p></div>
+</div>
+
+<!-- Modale : nouvelle imputation (Administrateur / Super Agent) -->
+<div class="modal-overlay" id="modal-nouvelle" style="display:none;">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Nouvelle imputation</h3>
+      <button class="modal-close" id="close-nouvelle">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-nouvelle">
+        <div class="field">
+          <label>Destinataire</label>
+          <select id="n-destinataire" required></select>
+        </div>
+        <div class="field">
+          <label>Consigne</label>
+          <textarea id="n-consigne" rows="4" required placeholder="Décrivez la tâche ou l'instruction à traiter…"></textarea>
+        </div>
+        <div class="field">
+          <label>Joindre un courrier (optionnel)</label>
+          <select id="n-courrier">
+            <option value="">— Aucun —</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Ou joindre un fichier (PDF / image, optionnel)</label>
+          <input type="file" id="n-fichier" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,application/pdf,image/*">
+          <p style="font-size:0.8rem; color:var(--text-muted); margin-top:4px;">Utile si le courrier n'est pas encore enregistré dans le système.</p>
+        </div>
+        <p id="erreur-nouvelle" class="msg-error" style="display:none;"></p>
+        <div class="modal-actions">
+          <button type="submit" class="btn btn-primary" id="btn-envoyer">Envoyer l'imputation</button>
+          <button type="button" class="btn btn-outline" id="btn-annuler-nouvelle">Annuler</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modale : détail / réponse -->
+<div class="modal-overlay" id="modal-detail" style="display:none;">
+  <div class="modal modal-large">
+    <div class="modal-header">
+      <h3 id="detail-titre">Imputation</h3>
+      <button class="modal-close" id="close-detail">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>De</label>
+        <p id="detail-emetteur" style="font-size:0.9rem;"></p>
+      </div>
+      <div class="field">
+        <label>À</label>
+        <p id="detail-destinataire" style="font-size:0.9rem;"></p>
+      </div>
+      <div class="field">
+        <label>Consigne</label>
+        <p id="detail-consigne" style="font-size:0.92rem; line-height:1.5;"></p>
+      </div>
+      <div class="field" id="bloc-courrier-joint" style="display:none;">
+        <label>Courrier joint</label>
+        <p id="detail-courrier" style="font-size:0.9rem;"></p>
+        <div class="pj-list" id="detail-pj"></div>
+      </div>
+      <div class="field" id="bloc-fichier-joint" style="display:none;">
+        <label>Fichier joint</label>
+        <div class="pj-list">
+          <div class="pj-item">
+            <span class="pj-label"><a id="detail-fichier-lien" href="#" target="_blank" rel="noopener"></a></span>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Statut</label>
+        <span class="status-tag" id="detail-statut"></span>
+      </div>
+
+      <div id="bloc-reponse-agent" style="display:none;">
+        <div class="field">
+          <label>Votre réponse / compte rendu</label>
+          <textarea id="r-reponse" rows="4" placeholder="Rédigez votre réponse…"></textarea>
+        </div>
+        <p id="erreur-reponse" class="msg-error" style="display:none;"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-primary" id="btn-prise-en-charge">Marquer « en cours »</button>
+          <button type="button" class="btn btn-arrivee" id="btn-envoyer-reponse">Envoyer la réponse</button>
+        </div>
+      </div>
+      <div class="modal-actions" style="margin-top: 12px; justify-content: flex-end;">
+        <button type="button" class="btn btn-danger" id="btn-supprimer-imputation" style="display:none;">Supprimer l'imputation</button>
+      </div>
+
+      <div id="bloc-reponse-lecture" style="display:none; margin-top:10px;">
+        <div class="field">
+          <label>Réponse reçue</label>
+          <p id="detail-reponse" style="font-size:0.92rem; line-height:1.5;"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/api-client.js"></script>
+<script>
+// ===================================================================
+// NAVBAR PARTAGÉE — injectée dans <div id="navbar"></div>
+// ===================================================================
+
+const NAV_ITEMS = [
+  { page: 'accueil', label: 'Accueil', href: 'accueil.html', roles: null },
+  { page: 'tableau-de-bord', label: 'Tableau de bord', href: 'tableau-de-bord.html', roles: null },
+  { page: 'entrants', label: 'Courriers entrants', href: 'courriers-entrants.html', roles: ['ADMINISTRATEUR', 'SUPER_AGENT'] },
+  { page: 'sortants', label: 'Courriers sortants', href: 'courriers-sortants.html', roles: ['ADMINISTRATEUR', 'SUPER_AGENT'] },
+  { page: 'imputations', label: 'Imputations', href: 'imputations.html', roles: null },
+  { page: 'parametres', label: 'Paramètres', href: 'parametres.html', roles: ['ADMINISTRATEUR'] },
+];
+
+const LABEL_ROLE = {
+  ADMINISTRATEUR: 'Administrateur',
+  SUPER_AGENT: 'Super Agent',
+  AGENT: 'Agent',
+};
+
+function resolveActivePage(activePage) {
+  const rawPage = activePage || window.location.pathname || '';
+  const normalized = rawPage
+    .split('?')[0]
+    .split('#')[0]
+    .replace(/\\/g, '/')
+    .toLowerCase();
+  const fileName = normalized.substring(normalized.lastIndexOf('/') + 1);
+  const baseName = fileName.replace(/\.html$/i, '');
+
+  const aliases = {
+    'accueil': 'accueil',
+    'accueil.html': 'accueil',
+    'tableau-de-bord': 'tableau-de-bord',
+    'tableau-de-bord.html': 'tableau-de-bord',
+    'courriers-entrants': 'entrants',
+    'courriers-entrants.html': 'entrants',
+    'courriers-sortants': 'sortants',
+    'courriers-sortants.html': 'sortants',
+    'imputations': 'imputations',
+    'imputations.html': 'imputations',
+    'parametres': 'parametres',
+    'parametres.html': 'parametres',
+    'index': null,
+    'index.html': null,
+  };
+
+  return aliases[baseName] || aliases[fileName] || null;
+}
+
+function formatDateRelative(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function lienNotification(n) {
+  if (n.lien_module === 'entrant') return 'courriers-entrants.html';
+  if (n.lien_module === 'sortant') return 'courriers-sortants.html';
+  if (n.lien_module === 'imputation') return 'imputations.html';
+  return null;
+}
+
+async function rafraichirCloche() {
+  const badge = document.getElementById('notif-badge');
+  const liste = document.getElementById('notif-liste');
+  if (!badge || !liste) return;
+  try {
+    const { notifications, non_lues } = await CourrierAPI.listerNotifications();
+    badge.style.display = non_lues > 0 ? 'inline-flex' : 'none';
+    badge.textContent = non_lues > 9 ? '9+' : String(non_lues);
+
+    liste.innerHTML = notifications.length ? notifications.map((n) => `
+      <div class="notif-item ${n.lu ? '' : 'notif-unread'}" data-id="${n.id}" data-href="${lienNotification(n) || ''}">
+        <div class="notif-msg">${n.message}</div>
+        <div class="notif-date">${formatDateRelative(n.created_at)}</div>
+      </div>
+    `).join('') : '<div class="notif-empty">Aucune notification.</div>';
+
+    liste.querySelectorAll('.notif-item').forEach((el) => {
+      el.addEventListener('click', async () => {
+        try { await CourrierAPI.marquerNotificationLue(el.dataset.id); } catch (e) { /* ignore */ }
+        if (el.dataset.href) window.location.href = el.dataset.href;
+        else rafraichirCloche();
+      });
+    });
+  } catch (err) {
+    console.error('Notifications:', err.message);
+  }
+}
+
+async function initNavbar(activePage) {
+  const el = document.getElementById('navbar');
+  if (!el) return null;
+
+  let user;
+  try {
+    user = await CourrierAPI.moi();
+  } catch (err) {
+    window.location.href = 'index.html';
+    return null;
+  }
+
+  const currentPage = resolveActivePage(activePage);
+
+  const links = NAV_ITEMS
+    .filter((item) => !item.roles || item.roles.includes(user.role))
+    .map((item) => `<a href="${item.href}" class="${item.page === currentPage ? 'active' : ''}">${item.label}</a>`)
+    .join('');
+
+  el.innerHTML = `
+    <header class="topbar">
+      <div class="brand">
+        <img src="images/muctat-logo.jpg" alt="Logo" onerror="this.style.display='none'">
+        <div>
+          <h1>Gestion des courriers</h1>
+        </div>
+      </div>
+      <nav>${links}</nav>
+      <div class="user-box">
+        <div class="notif-bell-wrap">
+          <button class="btn-bell" id="btn-cloche" title="Notifications" aria-label="Notifications">
+            🔔<span class="notif-badge" id="notif-badge" style="display:none;">0</span>
+          </button>
+          <div class="notif-dropdown" id="notif-dropdown" style="display:none;">
+            <div class="notif-dropdown-header">
+              <strong>Notifications</strong>
+              <button class="link-btn" id="btn-tout-lu" style="width:auto; margin:0;">Tout marquer comme lu</button>
+            </div>
+            <div class="notif-liste" id="notif-liste"><div class="notif-empty">Chargement…</div></div>
+          </div>
+        </div>
+        <div>
+          <div>${user.nom_complet}</div>
+          <div class="role-tag">${LABEL_ROLE[user.role] || user.role}</div>
+        </div>
+        <button class="btn-logout" id="btn-deconnexion">Déconnexion</button>
+      </div>
+    </header>
+  `;
+
+  document.getElementById('btn-deconnexion').addEventListener('click', async () => {
+    try { await CourrierAPI.logout(); } catch (e) { /* ignore */ }
+    window.location.href = 'index.html';
+  });
+
+  const cloche = document.getElementById('btn-cloche');
+  const dropdown = document.getElementById('notif-dropdown');
+  cloche.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+  });
+  document.addEventListener('click', (e) => {
+    if (!dropdown.contains(e.target) && e.target !== cloche) dropdown.style.display = 'none';
+  });
+  document.getElementById('btn-tout-lu').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    try { await CourrierAPI.marquerToutesNotificationsLues(); await rafraichirCloche(); } catch (err) { /* ignore */ }
+  });
+
+  rafraichirCloche();
+  setInterval(rafraichirCloche, 30000);
+
+  return user;
+}
+</script>
+<script>
+  let MOI = null;
+  let UTILISATEURS = [];
+  let COURRIERS_DISPONIBLES = [];
+  let IMPUTATIONS = [];
+  let imputationCouranteId = null;
+
+  const LABEL_STATUT = { en_attente: 'En attente', en_cours: 'En cours', traite: 'Traité' };
+
+  function ouvrirModale(id) { document.getElementById(id).style.display = 'flex'; }
+  function fermerModale(id) { document.getElementById(id).style.display = 'none'; }
+
+  async function chargerListesFormulaire() {
+    UTILISATEURS = await CourrierAPI.listerUtilisateurs();
+    const selectDest = document.getElementById('n-destinataire');
+    selectDest.innerHTML = UTILISATEURS
+      .filter((u) => u.id !== MOI.id && u.actif)
+      .map((u) => `<option value="${u.id}">${u.nom_complet}</option>`).join('');
+
+    const [entrants, sortants] = await Promise.all([
+      CourrierAPI.listerEntrants().catch(() => []),
+      CourrierAPI.listerSortants().catch(() => []),
+    ]);
+    COURRIERS_DISPONIBLES = [
+      ...entrants.map((c) => ({ module: 'entrant', id: c.id, label: `📥 ${c.numero} — ${c.objet}` })),
+      ...sortants.map((c) => ({ module: 'sortant', id: c.id, label: `📤 ${c.numero} — ${c.objet}` })),
+    ];
+    const selectCourrier = document.getElementById('n-courrier');
+    selectCourrier.innerHTML = '<option value="">— Aucun —</option>' +
+      COURRIERS_DISPONIBLES.map((c, i) => `<option value="${i}">${c.label}</option>`).join('');
+  }
+
+  function mettreAJourResume(imputations) {
+    document.getElementById('summary-total').textContent = imputations.length;
+    document.getElementById('summary-attente').textContent = imputations.filter((i) => i.statut === 'en_attente').length;
+    document.getElementById('summary-cours').textContent = imputations.filter((i) => i.statut === 'en_cours').length;
+    document.getElementById('summary-traite').textContent = imputations.filter((i) => i.statut === 'traite').length;
+  }
+
+  function carteImputation(imp) {
+    const courrierLabel = imp.courrier ? `${imp.courrier_module === 'entrant' ? '📥' : '📤'} ${imp.courrier.numero}` : (imp.fichier_chemin ? '📎 Fichier joint' : '');
+    return `
+      <div class="imputation-card" data-id="${imp.id}">
+        <div class="imp-top">
+          <div>
+            <strong>${MOI.role === 'AGENT' ? 'De : ' + (imp.emetteur ? imp.emetteur.nom_complet : '—') : 'Pour : ' + (imp.destinataire ? imp.destinataire.nom_complet : '—')}</strong>
+          </div>
+          <span class="status-tag status-${imp.statut}">${LABEL_STATUT[imp.statut]}</span>
+        </div>
+        <div class="imp-consigne">${imp.consigne}</div>
+        <div class="imp-meta">
+          ${courrierLabel ? courrierLabel + ' · ' : ''}${new Date(imp.created_at).toLocaleString('fr-FR')}
+        </div>
+      </div>
+    `;
+  }
+
+  async function chargerTableau() {
+    const conteneur = document.getElementById('liste-imputations');
+    conteneur.innerHTML = '<p class="empty-row">Chargement…</p>';
+    const filtres = {};
+    const statut = document.getElementById('filtre-statut').value;
+    if (statut) filtres.statut = statut;
+
+    IMPUTATIONS = await CourrierAPI.listerImputations(filtres);
+    mettreAJourResume(IMPUTATIONS);
+
+    if (!IMPUTATIONS.length) {
+      conteneur.innerHTML = '<div class="empty-row"><div class="empty-state">📝 Aucune imputation pour le moment.</div></div>';
+      return;
+    }
+    conteneur.innerHTML = IMPUTATIONS.map(carteImputation).join('');
+    conteneur.querySelectorAll('.imputation-card').forEach((el) => {
+      el.addEventListener('click', () => ouvrirDetail(parseInt(el.dataset.id, 10)));
+    });
+  }
+
+  async function ouvrirDetail(id) {
+    const imp = IMPUTATIONS.find((i) => i.id === id);
+    if (!imp) return;
+    imputationCouranteId = id;
+
+    document.getElementById('detail-titre').textContent = `Imputation #${imp.id}`;
+    document.getElementById('detail-emetteur').textContent = imp.emetteur ? imp.emetteur.nom_complet : '—';
+    document.getElementById('detail-destinataire').textContent = imp.destinataire ? imp.destinataire.nom_complet : '—';
+    document.getElementById('detail-consigne').textContent = imp.consigne;
+    document.getElementById('detail-statut').textContent = LABEL_STATUT[imp.statut];
+    document.getElementById('detail-statut').className = `status-tag status-${imp.statut}`;
+
+    const blocCourrier = document.getElementById('bloc-courrier-joint');
+    if (imp.courrier) {
+      blocCourrier.style.display = 'block';
+      document.getElementById('detail-courrier').textContent = `${imp.courrier_module === 'entrant' ? 'Courrier entrant' : 'Courrier sortant'} ${imp.courrier.numero} — ${imp.courrier.objet}`;
+      chargerPiecesJointes(imp.courrier_module, imp.courrier_id);
+    } else {
+      blocCourrier.style.display = 'none';
+      document.getElementById('detail-pj').innerHTML = '';
+    }
+
+    const blocFichier = document.getElementById('bloc-fichier-joint');
+    if (imp.fichier_chemin) {
+      blocFichier.style.display = 'block';
+      const lien = document.getElementById('detail-fichier-lien');
+      lien.href = CourrierAPI.urlScan(imp.fichier_chemin);
+      lien.textContent = imp.fichier_nom_original || 'Voir le fichier';
+    } else {
+      blocFichier.style.display = 'none';
+    }
+
+    const estDestinataire = MOI.id === imp.destinataire_id;
+    document.getElementById('bloc-reponse-agent').style.display = (estDestinataire && imp.statut !== 'traite') ? 'block' : 'none';
+    document.getElementById('bloc-reponse-lecture').style.display = imp.reponse ? 'block' : 'none';
+    if (imp.reponse) document.getElementById('detail-reponse').textContent = imp.reponse;
+    document.getElementById('r-reponse').value = '';
+    document.getElementById('erreur-reponse').style.display = 'none';
+
+    document.getElementById('btn-supprimer-imputation').style.display = (MOI.role === 'ADMINISTRATEUR') ? 'inline-flex' : 'none';
+
+    ouvrirModale('modal-detail');
+  }
+
+  async function chargerPiecesJointes(module, courrierId) {
+    const conteneur = document.getElementById('detail-pj');
+    conteneur.innerHTML = 'Chargement…';
+    try {
+      const pjs = await CourrierAPI.listerPiecesJointes(module, courrierId);
+      conteneur.innerHTML = pjs.length ? pjs.map((pj) => `
+        <div class="pj-item">
+          <span class="pj-label"><a href="${CourrierAPI.urlScan(pj.chemin)}" target="_blank" rel="noopener">${pj.nom_original}</a></span>
+        </div>
+      `).join('') : '<p style="color:var(--text-muted); font-size:0.85rem;">Aucune pièce jointe.</p>';
+    } catch (err) {
+      conteneur.innerHTML = `<p class="msg-error">${err.message}</p>`;
+    }
+  }
+
+  document.getElementById('btn-nouvelle').addEventListener('click', () => {
+    document.getElementById('form-nouvelle').reset();
+    document.getElementById('erreur-nouvelle').style.display = 'none';
+    ouvrirModale('modal-nouvelle');
+  });
+  document.getElementById('close-nouvelle').addEventListener('click', () => fermerModale('modal-nouvelle'));
+  document.getElementById('btn-annuler-nouvelle').addEventListener('click', () => fermerModale('modal-nouvelle'));
+  document.getElementById('close-detail').addEventListener('click', () => fermerModale('modal-detail'));
+
+  document.getElementById('form-nouvelle').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const erreur = document.getElementById('erreur-nouvelle');
+    erreur.style.display = 'none';
+    const indexCourrier = document.getElementById('n-courrier').value;
+    const courrier = indexCourrier !== '' ? COURRIERS_DISPONIBLES[indexCourrier] : null;
+    const fichier = document.getElementById('n-fichier').files[0] || null;
+    const btnEnvoyer = document.getElementById('btn-envoyer');
+
+    try {
+      let fichierInfos = null;
+      if (fichier) {
+        btnEnvoyer.disabled = true;
+        btnEnvoyer.textContent = 'Envoi du fichier…';
+        fichierInfos = await CourrierAPI.televerserFichierImputation(fichier);
+      }
+      await CourrierAPI.creerImputation({
+        destinataire_id: document.getElementById('n-destinataire').value,
+        consigne: document.getElementById('n-consigne').value.trim(),
+        courrier_module: courrier ? courrier.module : null,
+        courrier_id: courrier ? courrier.id : null,
+        fichier_chemin: fichierInfos ? fichierInfos.chemin : null,
+        fichier_nom_original: fichierInfos ? fichierInfos.nom_original : null,
+        fichier_type_mime: fichierInfos ? fichierInfos.type_mime : null,
+      });
+      fermerModale('modal-nouvelle');
+      await chargerTableau();
+    } catch (err) {
+      erreur.textContent = err.message;
+      erreur.style.display = 'block';
+    } finally {
+      btnEnvoyer.disabled = false;
+      btnEnvoyer.textContent = 'Envoyer l\'imputation';
+    }
+  });
+
+  document.getElementById('btn-prise-en-charge').addEventListener('click', async () => {
+    try {
+      await CourrierAPI.modifierImputation(imputationCouranteId, { statut: 'en_cours' });
+      fermerModale('modal-detail');
+      await chargerTableau();
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+
+  document.getElementById('btn-envoyer-reponse').addEventListener('click', async () => {
+    const erreur = document.getElementById('erreur-reponse');
+    erreur.style.display = 'none';
+    const reponse = document.getElementById('r-reponse').value.trim();
+    if (!reponse) {
+      erreur.textContent = 'Veuillez rédiger une réponse avant de l\'envoyer.';
+      erreur.style.display = 'block';
+      return;
+    }
+    try {
+      await CourrierAPI.modifierImputation(imputationCouranteId, { reponse });
+      fermerModale('modal-detail');
+      await chargerTableau();
+    } catch (err) {
+      erreur.textContent = err.message;
+      erreur.style.display = 'block';
+    }
+  });
+
+  document.getElementById('btn-supprimer-imputation').addEventListener('click', async () => {
+    if (!imputationCouranteId || !confirm('Supprimer définitivement cette imputation ?')) return;
+    try {
+      await CourrierAPI.supprimerImputation(imputationCouranteId);
+      fermerModale('modal-detail');
+      await chargerTableau();
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+
+  document.getElementById('filtre-statut').addEventListener('change', chargerTableau);
+
+  async function demarrer() {
+    MOI = await initNavbar('imputations');
+    if (MOI.role === 'AGENT') {
+      document.getElementById('page-subtitle').textContent = 'Consignes reçues, courrier joint et réponses';
+    } else {
+      document.getElementById('btn-nouvelle').style.display = 'inline-flex';
+      await chargerListesFormulaire();
+    }
+    await chargerTableau();
+  }
+  demarrer().catch((err) => alert(err.message));
+</script>
+<div style="position: fixed; bottom: 14px; right: 16px; font-size: 12px; line-height: 1; font-weight: 700; letter-spacing: 0.04em; color: #ffffff; background: rgba(15, 23, 42, 0.78); border: 1px solid rgba(255,255,255,0.18); padding: 7px 12px; border-radius: 999px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); backdrop-filter: blur(3px); font-family: 'Source Sans 3', sans-serif; z-index: 1000;">
+  © MMS, 2026
+</div>
+</body>
+</html>
